@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
   <title>RAD WebGL</title>
-  <link rel="icon" href="data:,"><!-- 404 favicon uyarısını susturur -->
+  <link rel="icon" href="data:,">
   <style>
     html,body{height:100%;margin:0;background:#231F20}
     #unity-container,#unity-canvas{width:100%;height:100%}
@@ -15,26 +15,17 @@
     <canvas id="unity-canvas" tabindex="-1"></canvas>
   </div>
 
-  <!-- Unity loader (RAD/docs/Build/...) -->
+  <!-- Unity loader -->
   <script src="Build/bld.loader.js"></script>
 
-  <!-- Unity'yi başlat -->
+  <!-- JSON config ile başlat (dosya adlarını loader kendi çözer) -->
   <script>
     const canvas = document.getElementById("unity-canvas");
-    createUnityInstance(canvas, {
-      dataUrl: "Build/bld.data",
-      frameworkUrl: "Build/bld.framework.js",
-      codeUrl: "Build/bld.wasm",
-      streamingAssetsUrl: "StreamingAssets",
-      companyName: "Ekrep",
-      productName: "RAD",
-      productVersion: "1.0"
-    }).then(u => {
-      window.unityInstance = u;      // JS -> Unity SendMessage için lazım
+    createUnityInstance(canvas, "Build/bld.json").then(u=>{
+      window.unityInstance = u;
       console.log("Unity yüklendi ✅");
-      // Unity yüklendikten sonra FaceAPI'yi başlatmak istersen:
-      if (window.FaceAPI && window.FaceAPI.start) window.FaceAPI.start();
-    }).catch(err => {
+      if (window.FaceAPI?.start) window.FaceAPI.start();
+    }).catch(err=>{
       console.error("Unity başlatılamadı:", err);
     });
   </script>
