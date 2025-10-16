@@ -1,95 +1,97 @@
-<!DOCTYPE html>
-<html lang="en">
+<!doctype html>
+<html lang="tr">
 <head>
   <meta charset="utf-8" />
-  <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+  <title>Unity WebGL - Teşhis</title>
   <link rel="icon" href="data:,">
-  <title>%UNITY_WEBGL_NAME%</title>
-  %UNITY_WEBGL_HEAD_HTML%
-  <style>html,body,#unity-container{margin:0;padding:0;height:100%;}</style>
+  <style>
+    html,body { height:100%; margin:0; background:#111; color:#eee; font:14px system-ui, -apple-system; }
+    #unity-canvas { width:100%; height:70vh; background:#222; display:block; }
+    #log { white-space:pre-wrap; padding:12px; border-top:1px solid #333; }
+    .ok { color:#9f9; } .err { color:#f99; } .warn { color:#ff9; }
+    button { padding:8px 12px; margin:8px 8px 0 0; }
+  </style>
 </head>
 <body>
-  <div id="unity-container" style="width:100%;height:100%;background:#231F20">
-    <canvas id="unity-canvas" tabindex="-1" style="width:100%;height:100%"></canvas>
+  <canvas id="unity-canvas"></canvas>
+  <div style="padding:12px;">
+    <button id="btnCamera">Kamera izni test</button>
   </div>
+  <div id="log"></div>
 
-  %UNITY_WEBGL_LOADER_GLUE%
-
-  <!-- MediaPipe + IPD entegrasyonu -->
-  <script type="module">
-  import { FaceLandmarker, FilesetResolver }
-    from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest";
-
-  const W = 640, H = 480;
-  let video, landmarker, receiverName = null, running = false, q = [];
-
-  async function init() {
-    video = document.createElement('video');
-    video.width=W; video.height=H; video.autoplay=true; video.playsInline=true; video.muted=true;
-    document.body.appendChild(video);
-    const stream = await navigator.mediaDevices.getUserMedia({ video:{width:W,height:H}, audio:false });
-    video.srcObject = stream;
-
-    const fs = await FilesetResolver.forVisionTasks(
-      "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm");
-    landmarker = await FaceLandmarker.createFromOptions(fs, {
-      baseOptions: {
-        modelAssetPath:
-          "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/latest/face_landmarker.task"
-      },
-      runningMode: "VIDEO",
-      numFaces: 1,
-      outputFaceBlendshapes: false,
-      outputFacialTransformationMatrixes: false
-    });
-  }
-
-  function irisRadiusPx(lm,c,r0){
-    const cx=lm[c].x*W, cy=lm[c].y*H;
-    let s=0; for(let i=r0;i<r0+4;i++){ const px=lm[i].x*W, py=lm[i].y*H; s+=Math.hypot(px-cx,py-cy); }
-    return s/4;
-  }
-  function calibrateMmPerPx(lm){
-    const r=irisRadiusPx(lm,468,469), l=irisRadiusPx(lm,473,474);
-    const avg=(r+l)/2; return 11.7/(avg*2);
-  }
-  function ipdPx(lm){
-    const r=lm[468], l=lm[473];
-    return Math.hypot((l.x-r.x)*W,(l.y-r.y)*H);
-  }
-  function smooth(v){ if(v==null)return null; q.push(v); if(q.length>10)q.shift(); return q.reduce((a,b)=>a+b,0)/q.length; }
-
-  function sendToUnity(obj){
-    const msg = JSON.stringify(obj);
-    if (window.unityInstance?.SendMessage) {
-      window.unityInstance.SendMessage(receiverName, "OnFace", msg);
-    } else if (typeof SendMessage === "function") {
-      SendMessage(receiverName, "OnFace", msg);
+  <script>
+    const logEl = document.getElementById('log');
+    function log(msg, cls){ 
+      const p = document.createElement('div'); 
+      if (cls) p.className = cls; 
+      p.textContent = msg; 
+      logEl.appendChild(p); 
+      console.log(msg); 
     }
-  }
 
-  async function loop(){
-    if(!running || !landmarker){requestAnimationFrame(loop);return;}
-    const ts = performance.now();
-    if(video.readyState>=2){
-      const res = landmarker.detectForVideo(video, ts);
-      const f = res?.faceLandmarks?.[0];
-      if (f){
-        const px = ipdPx(f);
-        const mm = px * calibrateMmPerPx(f);
-        sendToUnity({ ipdPx: smooth(px), ipdMm: smooth(mm) });
+    // 0) Sayfa ve protokol durumu
+    log('Sayfa yüklendi. Protokol: ' + location.protocol, 'ok');
+    if (!location.pathname.endsWith('/')) {
+      // sadece bilgi; index.html doğrudan da çalışır
+      log('Yol: ' + location.pathname, 'warn');
+    }
+
+    // 1) Unity loader'ı yüklemeyi dene
+    (function loadLoader(){
+      const s = document.createElement('script');
+      // >>> BURAYI KENDİ ADINA GÖRE DÜZELT: NAME = Build klasöründeki dosya kök adı <<<
+      s.src = 'Build/bld.loader.js';
+      s.onload = function(){
+        log('Loader JS yüklendi: ' + s.src, 'ok');
+        if (typeof createUnityInstance !== 'function') {
+          log('createUnityInstance fonksiyonu bulunamadı. Dosya adı yanlış olabilir.', 'err');
+        } else {
+          startUnity();
+        }
+      };
+      s.onerror = function(){
+        log('Loader JS yüklenemedi: ' + s.src + ' (dosya adı/konum yanlış?)', 'err');
+      };
+      document.body.appendChild(s);
+    })();
+
+    async function startUnity(){
+      const canvas = document.getElementById('unity-canvas');
+
+      // >>> BURAYI DA AYNI NAME İLE DÜZELT <<<
+      const cfg = {
+        dataUrl: 'Build/bld.data',
+        frameworkUrl: 'Build/bld.framework.js',
+        codeUrl: 'Build/bld.wasm',
+        streamingAssetsUrl: 'StreamingAssets', // varsa
+        companyName: 'Company',
+        productName: 'bld',
+        productVersion: '1.0'
+      };
+
+      // Decompression Fallback test uyarısı (bilgilendirici)
+      log('Unity başlatılıyor…', 'warn');
+      try {
+        const inst = await createUnityInstance(canvas, cfg);
+        window.unityInstance = inst;
+        log('Unity başlatıldı ✅', 'ok');
+      } catch (e) {
+        log('Unity başlatılırken hata yakalandı: ' + (e && e.message ? e.message : e), 'err');
+        log('İpucu: Player > WebGL > Publishing Settings → Compression: Gzip veya Disabled, Decompression Fallback: Enabled olmalı.', 'warn');
       }
     }
-    requestAnimationFrame(loop);
-  }
 
-  // Unity'den çağrılacak API
-  window.FaceAPI = {
-    async start(){ if(!landmarker) await init(); if(!running){ running=true; loop(); } },
-    stop(){ running=false; },
-    setReceiver(n){ receiverName = n; }
-  };
+    // 2) Kamera izni testi (loader’dan bağımsız)
+    document.getElementById('btnCamera').onclick = async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+        stream.getTracks().forEach(t => t.stop());
+        log('Kamera izni verildi (getUserMedia OK).', 'ok');
+      } catch (err) {
+        log('Kamera izni/erişimi başarısız: ' + err, 'err');
+      }
+    };
   </script>
 </body>
 </html>
