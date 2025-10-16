@@ -3,95 +3,40 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
-  <title>Unity WebGL - Teşhis</title>
+  <title>Unity WebGL</title>
   <link rel="icon" href="data:,">
   <style>
-    html,body { height:100%; margin:0; background:#111; color:#eee; font:14px system-ui, -apple-system; }
-    #unity-canvas { width:100%; height:70vh; background:#222; display:block; }
-    #log { white-space:pre-wrap; padding:12px; border-top:1px solid #333; }
-    .ok { color:#9f9; } .err { color:#f99; } .warn { color:#ff9; }
-    button { padding:8px 12px; margin:8px 8px 0 0; }
+    html,body {height:100%;margin:0;background:#231F20;}
+    #unity-container,#unity-canvas{width:100%;height:100%;}
   </style>
 </head>
 <body>
-  <canvas id="unity-canvas"></canvas>
-  <div style="padding:12px;">
-    <button id="btnCamera">Kamera izni test</button>
+  <div id="unity-container">
+    <canvas id="unity-canvas" tabindex="-1"></canvas>
   </div>
-  <div id="log"></div>
 
+  <!-- 1) Unity loader -->
+  <script src="Build/bld.loader.js"></script>
+
+  <!-- 2) createUnityInstance -->
   <script>
-    const logEl = document.getElementById('log');
-    function log(msg, cls){ 
-      const p = document.createElement('div'); 
-      if (cls) p.className = cls; 
-      p.textContent = msg; 
-      logEl.appendChild(p); 
-      console.log(msg); 
-    }
-
-    // 0) Sayfa ve protokol durumu
-    log('Sayfa yüklendi. Protokol: ' + location.protocol, 'ok');
-    if (!location.pathname.endsWith('/')) {
-      // sadece bilgi; index.html doğrudan da çalışır
-      log('Yol: ' + location.pathname, 'warn');
-    }
-
-    // 1) Unity loader'ı yüklemeyi dene
-    (function loadLoader(){
-      const s = document.createElement('script');
-      // >>> BURAYI KENDİ ADINA GÖRE DÜZELT: NAME = Build klasöründeki dosya kök adı <<<
-      s.src = 'Build/bld.loader.js';
-      s.onload = function(){
-        log('Loader JS yüklendi: ' + s.src, 'ok');
-        if (typeof createUnityInstance !== 'function') {
-          log('createUnityInstance fonksiyonu bulunamadı. Dosya adı yanlış olabilir.', 'err');
-        } else {
-          startUnity();
-        }
-      };
-      s.onerror = function(){
-        log('Loader JS yüklenemedi: ' + s.src + ' (dosya adı/konum yanlış?)', 'err');
-      };
-      document.body.appendChild(s);
-    })();
-
-    async function startUnity(){
-      const canvas = document.getElementById('unity-canvas');
-
-      // >>> BURAYI DA AYNI NAME İLE DÜZELT <<<
-      const cfg = {
-        dataUrl: 'Build/bld.data',
-        frameworkUrl: 'Build/bld.framework.js',
-        codeUrl: 'Build/bld.wasm',
-        streamingAssetsUrl: 'StreamingAssets', // varsa
-        companyName: 'Company',
-        productName: 'bld',
-        productVersion: '1.0'
-      };
-
-      // Decompression Fallback test uyarısı (bilgilendirici)
-      log('Unity başlatılıyor…', 'warn');
-      try {
-        const inst = await createUnityInstance(canvas, cfg);
-        window.unityInstance = inst;
-        log('Unity başlatıldı ✅', 'ok');
-      } catch (e) {
-        log('Unity başlatılırken hata yakalandı: ' + (e && e.message ? e.message : e), 'err');
-        log('İpucu: Player > WebGL > Publishing Settings → Compression: Gzip veya Disabled, Decompression Fallback: Enabled olmalı.', 'warn');
-      }
-    }
-
-    // 2) Kamera izni testi (loader’dan bağımsız)
-    document.getElementById('btnCamera').onclick = async () => {
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
-        stream.getTracks().forEach(t => t.stop());
-        log('Kamera izni verildi (getUserMedia OK).', 'ok');
-      } catch (err) {
-        log('Kamera izni/erişimi başarısız: ' + err, 'err');
-      }
-    };
+    const canvas = document.getElementById("unity-canvas");
+    createUnityInstance(canvas, {
+      dataUrl: "Build/bld.data",
+      frameworkUrl: "Build/bld.framework.js",
+      codeUrl: "Build/bld.wasm",
+      streamingAssetsUrl: "StreamingAssets",
+      companyName: "Ekrep",
+      productName: "RAD",
+      productVersion: "1.0",
+    }).then((unityInstance) => {
+      window.unityInstance = unityInstance;
+      console.log("Unity yükleme tamam ✅");
+    }).catch((err)=>{
+      console.error("Unity başlatılamadı:", err);
+    });
   </script>
+
+  <!-- 3) (İsteğe bağlı) FaceAPI / MediaPipe entegrasyonunu buraya ekleyebilirsin -->
 </body>
 </html>
