@@ -3,11 +3,11 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
-  <title>Unity WebGL</title>
-  <link rel="icon" href="data:,">
+  <title>RAD WebGL</title>
+  <link rel="icon" href="data:,"><!-- 404 favicon uyarısını susturur -->
   <style>
-    html,body {height:100%;margin:0;background:#231F20;}
-    #unity-container,#unity-canvas{width:100%;height:100%;}
+    html,body{height:100%;margin:0;background:#231F20}
+    #unity-container,#unity-canvas{width:100%;height:100%}
   </style>
 </head>
 <body>
@@ -15,10 +15,10 @@
     <canvas id="unity-canvas" tabindex="-1"></canvas>
   </div>
 
-  <!-- 1) Unity loader -->
+  <!-- Unity loader (RAD/docs/Build/...) -->
   <script src="Build/bld.loader.js"></script>
 
-  <!-- 2) createUnityInstance -->
+  <!-- Unity'yi başlat -->
   <script>
     const canvas = document.getElementById("unity-canvas");
     createUnityInstance(canvas, {
@@ -28,15 +28,94 @@
       streamingAssetsUrl: "StreamingAssets",
       companyName: "Ekrep",
       productName: "RAD",
-      productVersion: "1.0",
-    }).then((unityInstance) => {
-      window.unityInstance = unityInstance;
-      console.log("Unity yükleme tamam ✅");
-    }).catch((err)=>{
+      productVersion: "1.0"
+    }).then(u => {
+      window.unityInstance = u;      // JS -> Unity SendMessage için lazım
+      console.log("Unity yüklendi ✅");
+      // Unity yüklendikten sonra FaceAPI'yi başlatmak istersen:
+      if (window.FaceAPI && window.FaceAPI.start) window.FaceAPI.start();
+    }).catch(err => {
       console.error("Unity başlatılamadı:", err);
     });
   </script>
 
-  <!-- 3) (İsteğe bağlı) FaceAPI / MediaPipe entegrasyonunu buraya ekleyebilirsin -->
+  <!-- (Opsiyonel) MediaPipe + IPD (FaceAPI) entegrasyonu -->
+  <script type="module">
+    import { FaceLandmarker, FilesetResolver }
+      from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest";
+
+    const W = 640, H = 480;
+    let video, landmarker, receiverName = null, running = false, q = [];
+
+    async function init() {
+      // Kamera
+      video = document.createElement('video');
+      video.width=W; video.height=H; video.autoplay=true; video.playsInline=true; video.muted=true;
+      document.body.appendChild(video);
+      const stream = await navigator.mediaDevices.getUserMedia({ video:{width:W,height:H}, audio:false });
+      video.srcObject = stream;
+
+      // Model
+      const fs = await FilesetResolver.forVisionTasks(
+        "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm");
+      landmarker = await FaceLandmarker.createFromOptions(fs, {
+        baseOptions: {
+          modelAssetPath:
+            "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/latest/face_landmarker.task"
+        },
+        runningMode: "VIDEO",
+        numFaces: 1,
+        outputFaceBlendshapes: false,
+        outputFacialTransformationMatrixes: false
+      });
+    }
+
+    function irisRadiusPx(lm,c,r0){
+      const cx=lm[c].x*W, cy=lm[c].y*H;
+      let s=0; for(let i=r0;i<r0+4;i++){ const px=lm[i].x*W, py=lm[i].y*H; s+=Math.hypot(px-cx,py-cy); }
+      return s/4;
+    }
+    function calibrateMmPerPx(lm){
+      const r=irisRadiusPx(lm,468,469), l=irisRadiusPx(lm,473,474);
+      const avg=(r+l)/2; return 11.7/(avg*2);
+    }
+    function ipdPx(lm){
+      const r=lm[468], l=lm[473];
+      return Math.hypot((l.x-r.x)*W,(l.y-r.y)*H);
+    }
+    function smooth(v){ if(v==null)return null; q.push(v); if(q.length>10)q.shift(); return q.reduce((a,b)=>a+b,0)/q.length; }
+
+    function sendToUnity(obj){
+      const msg = JSON.stringify(obj);
+      if (window.unityInstance?.SendMessage) {
+        // Unity sahnesinde FaceBridge scriptini taşıyan GameObject adını gönder
+        window.unityInstance.SendMessage(receiverName || "FaceBridge", "OnFace", msg);
+      } else if (typeof SendMessage === "function") {
+        SendMessage(receiverName || "FaceBridge", "OnFace", msg);
+      }
+    }
+
+    async function loop(){
+      if(!running || !landmarker){ requestAnimationFrame(loop); return; }
+      const ts = performance.now();
+      if(video.readyState>=2){
+        const res = landmarker.detectForVideo(video, ts);
+        const f = res?.faceLandmarks?.[0];
+        if (f){
+          const px = ipdPx(f);
+          const mm = px * calibrateMmPerPx(f);
+          sendToUnity({ ipdPx: smooth(px), ipdMm: smooth(mm) });
+        }
+      }
+      requestAnimationFrame(loop);
+    }
+
+    // Unity'den .jslib ile çağrılmasa da manual kontrol için FaceAPI objesi:
+    window.FaceAPI = {
+      async start(){ if(!landmarker) await init(); if(!running){ running=true; loop(); } },
+      stop(){ running=false; },
+      setReceiver(n){ receiverName = n; }
+    };
+  </script>
 </body>
 </html>
