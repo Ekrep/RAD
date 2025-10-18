@@ -1,125 +1,172 @@
 <!DOCTYPE html>
 <html lang="en-us">
-  <head>
-    <meta charset="utf-8">
-    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-    <title>Unity Web Player | RADReader</title>
-    <link rel="shortcut icon" href="TemplateData/favicon.ico">
-    <link rel="stylesheet" href="TemplateData/style.css">
-    <link rel="manifest" href="manifest.webmanifest">
-  </head>
-  <body>
-    <div id="unity-container">
-      <canvas id="unity-canvas" width=960 height=600 tabindex="-1"></canvas>
-      <div id="unity-loading-bar">
-        <div id="unity-logo"></div>
-        <div id="unity-progress-bar-empty">
-          <div id="unity-progress-bar-full"></div>
-        </div>
+
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+  <title>Unity Web Player | RADReader</title>
+  <link rel="shortcut icon" href="TemplateData/favicon.ico">
+  <link rel="stylesheet" href="TemplateData/style.css">
+  <link rel="manifest" href="manifest.webmanifest">
+</head>
+
+<body>
+  <div id="unity-container">
+    <canvas id="unity-canvas" width=960 height=600 tabindex="-1"></canvas>
+    <div id="unity-loading-bar">
+      <div id="unity-logo"></div>
+      <div id="unity-progress-bar-empty">
+        <div id="unity-progress-bar-full"></div>
       </div>
-      <div id="unity-warning"> </div>
     </div>
-    <script>
-      window.addEventListener("load", function () {
-        if ("serviceWorker" in navigator) {
-          navigator.serviceWorker.register("ServiceWorker.js");
-        }
+    <div id="unity-warning"> </div>
+  </div>
+  <script>
+    window.addEventListener("load", function () {
+      if ("serviceWorker" in navigator) {
+        navigator.serviceWorker.register("ServiceWorker.js");
+      }
+    });
+
+    var container = document.querySelector("#unity-container");
+    var canvas = document.querySelector("#unity-canvas");
+    var loadingBar = document.querySelector("#unity-loading-bar");
+    var progressBarFull = document.querySelector("#unity-progress-bar-full");
+    var warningBanner = document.querySelector("#unity-warning");
+
+    // Shows a temporary message banner/ribbon for a few seconds, or
+    // a permanent error message on top of the canvas if type=='error'.
+    // If type=='warning', a yellow highlight color is used.
+    // Modify or remove this function to customize the visually presented
+    // way that non-critical warnings and error messages are presented to the
+    // user.
+    function unityShowBanner(msg, type) {
+      function updateBannerVisibility() {
+        warningBanner.style.display = warningBanner.children.length ? 'block' : 'none';
+      }
+      var div = document.createElement('div');
+      div.innerHTML = msg;
+      warningBanner.appendChild(div);
+      if (type == 'error') div.style = 'background: red; padding: 10px;';
+      else {
+        if (type == 'warning') div.style = 'background: yellow; padding: 10px;';
+        setTimeout(function () {
+          warningBanner.removeChild(div);
+          updateBannerVisibility();
+        }, 5000);
+      }
+      updateBannerVisibility();
+    }
+
+    var buildUrl = "Build";
+    var loaderUrl = buildUrl + "/bld.loader.js";
+    var config = {
+      arguments: [],
+      dataUrl: buildUrl + "/bld.data",
+      frameworkUrl: buildUrl + "/bld.framework.js",
+      codeUrl: buildUrl + "/bld.wasm",
+      streamingAssetsUrl: "StreamingAssets",
+      companyName: "DefaultCompany",
+      productName: "RADReader",
+      productVersion: "0.1.0",
+      showBanner: unityShowBanner,
+      // errorHandler: function(err, url, line) {
+      //    alert("error " + err + " occurred at line " + line);
+      //    // Return 'true' if you handled this error and don't want Unity
+      //    // to process it further, 'false' otherwise.
+      //    return true;
+      // },
+    };
+
+    // By default Unity keeps WebGL canvas render target size matched with
+    // the DOM size of the canvas element (scaled by window.devicePixelRatio)
+    // Set this to false if you want to decouple this synchronization from
+    // happening inside the engine, and you would instead like to size up
+    // the canvas DOM size and WebGL render target sizes yourself.
+    // config.matchWebGLToCanvasSize = false;
+
+    if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
+      // Mobile device style: fill the whole browser client area with the game canvas:
+      var meta = document.createElement('meta');
+      meta.name = 'viewport';
+      meta.content = 'width=device-width, height=device-height, initial-scale=1.0, user-scalable=no, shrink-to-fit=yes';
+      document.getElementsByTagName('head')[0].appendChild(meta);
+    }
+
+
+    loadingBar.style.display = "block";
+
+    var script = document.createElement("script");
+    script.src = loaderUrl;
+    script.onload = () => {
+      createUnityInstance(canvas, config, (progress) => {
+        progressBarFull.style.width = 100 * progress + "%";
+      }).then((unityInstance) => {
+        loadingBar.style.display = "none";
+      }).catch((message) => {
+        alert(message);
+      });
+    };
+    document.body.appendChild(script);
+  </script>
+  <script>
+    (async () => {
+      const canvas = document.getElementById('unity-canvas');
+
+      // 1) JSON'u getir
+      const cfgUrl = 'Build/bld.json';
+      const res = await fetch(cfgUrl, { cache: 'no-store' });
+      if (!res.ok) {
+        console.error('Config JSON bulunamadı:', cfgUrl, res.status);
+        return;
+      }
+      const cfg = await res.json();
+
+      // 2) Meta alanları ekle (uyarıları susturur)
+      cfg.companyName = cfg.companyName || 'Ekrep';
+      cfg.productName = cfg.productName || 'RAD';
+      cfg.productVersion = cfg.productVersion || '1.0';
+
+      // 3) ZORUNLU alanlar (bunlar yoksa 404/undefined olur)
+      if (!cfg.dataUrl || !cfg.frameworkUrl || !cfg.codeUrl) {
+        console.error('Config eksik! Beklenen alanlar yok:', {
+          hasDataUrl: !!cfg.dataUrl,
+          hasFrameworkUrl: !!cfg.frameworkUrl,
+          hasCodeUrl: !!cfg.codeUrl,
+          cfg
+        });
+        return;
+      }
+
+      // 4) Yol düzeltmesi: JSON bazı Unity sürümlerinde görece relative verir
+      ['dataUrl', 'frameworkUrl', 'codeUrl'].forEach(k => {
+        if (cfg[k] && !cfg[k].startsWith('Build/')) cfg[k] = 'Build/' + cfg[k];
       });
 
-      var container = document.querySelector("#unity-container");
-      var canvas = document.querySelector("#unity-canvas");
-      var loadingBar = document.querySelector("#unity-loading-bar");
-      var progressBarFull = document.querySelector("#unity-progress-bar-full");
-      var warningBanner = document.querySelector("#unity-warning");
-
-      // Shows a temporary message banner/ribbon for a few seconds, or
-      // a permanent error message on top of the canvas if type=='error'.
-      // If type=='warning', a yellow highlight color is used.
-      // Modify or remove this function to customize the visually presented
-      // way that non-critical warnings and error messages are presented to the
-      // user.
-      function unityShowBanner(msg, type) {
-        function updateBannerVisibility() {
-          warningBanner.style.display = warningBanner.children.length ? 'block' : 'none';
-        }
-        var div = document.createElement('div');
-        div.innerHTML = msg;
-        warningBanner.appendChild(div);
-        if (type == 'error') div.style = 'background: red; padding: 10px;';
-        else {
-          if (type == 'warning') div.style = 'background: yellow; padding: 10px;';
-          setTimeout(function() {
-            warningBanner.removeChild(div);
-            updateBannerVisibility();
-          }, 5000);
-        }
-        updateBannerVisibility();
+      // 5) Başlat
+      try {
+        const u = await createUnityInstance(canvas, cfg);
+        window.unityInstance = u;
+        console.log('Unity yüklendi ✅');
+      } catch (e) {
+        console.error('Unity başlatılamadı:', e);
+        console.warn('Unity → Player → WebGL → Publishing Settings: Compression = Gzip veya Disabled, Decompression Fallback = Enabled olmalı.');
       }
-
-      var buildUrl = "Build";
-      var loaderUrl = buildUrl + "/bld.loader.js";
-      var config = {
-        arguments: [],
-        dataUrl: buildUrl + "/bld.data",
-        frameworkUrl: buildUrl + "/bld.framework.js",
-        codeUrl: buildUrl + "/bld.wasm",
-        streamingAssetsUrl: "StreamingAssets",
-        companyName: "DefaultCompany",
-        productName: "RADReader",
-        productVersion: "0.1.0",
-        showBanner: unityShowBanner,
-        // errorHandler: function(err, url, line) {
-        //    alert("error " + err + " occurred at line " + line);
-        //    // Return 'true' if you handled this error and don't want Unity
-        //    // to process it further, 'false' otherwise.
-        //    return true;
-        // },
-      };
-
-      // By default Unity keeps WebGL canvas render target size matched with
-      // the DOM size of the canvas element (scaled by window.devicePixelRatio)
-      // Set this to false if you want to decouple this synchronization from
-      // happening inside the engine, and you would instead like to size up
-      // the canvas DOM size and WebGL render target sizes yourself.
-      // config.matchWebGLToCanvasSize = false;
-
-      if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
-        // Mobile device style: fill the whole browser client area with the game canvas:
-        var meta = document.createElement('meta');
-        meta.name = 'viewport';
-        meta.content = 'width=device-width, height=device-height, initial-scale=1.0, user-scalable=no, shrink-to-fit=yes';
-        document.getElementsByTagName('head')[0].appendChild(meta);
-      }
-
-
-      loadingBar.style.display = "block";
-
-      var script = document.createElement("script");
-      script.src = loaderUrl;
-      script.onload = () => {
-        createUnityInstance(canvas, config, (progress) => {
-          progressBarFull.style.width = 100 * progress + "%";
-        }).then((unityInstance) => {
-          loadingBar.style.display = "none";
-        }).catch((message) => {
-          alert(message);
-        });
-      };
-      document.body.appendChild(script);
-    </script>
-    <script type="module">
+    })();
+  </script>
+  <script type="module">
     import { FaceLandmarker, FilesetResolver }
       from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest";
 
     const W = 640, H = 480;
-    let video, landmarker, receiverName = null, running = false, q = [];
+    let video, landmarker, receiverName = "Bridge", running = false, q = [];
 
     async function init() {
       // Kamera
       video = document.createElement('video');
-      video.width=W; video.height=H; video.autoplay=true; video.playsInline=true; video.muted=true;
+      video.width = W; video.height = H; video.autoplay = true; video.playsInline = true; video.muted = true;
       document.body.appendChild(video);
-      const stream = await navigator.mediaDevices.getUserMedia({ video:{width:W,height:H}, audio:false });
+      const stream = await navigator.mediaDevices.getUserMedia({ video: { width: W, height: H }, audio: false });
       video.srcObject = stream;
 
       // Model
@@ -137,38 +184,38 @@
       });
     }
 
-    function irisRadiusPx(lm,c,r0){
-      const cx=lm[c].x*W, cy=lm[c].y*H;
-      let s=0; for(let i=r0;i<r0+4;i++){ const px=lm[i].x*W, py=lm[i].y*H; s+=Math.hypot(px-cx,py-cy); }
-      return s/4;
+    function irisRadiusPx(lm, c, r0) {
+      const cx = lm[c].x * W, cy = lm[c].y * H;
+      let s = 0; for (let i = r0; i < r0 + 4; i++) { const px = lm[i].x * W, py = lm[i].y * H; s += Math.hypot(px - cx, py - cy); }
+      return s / 4;
     }
-    function calibrateMmPerPx(lm){
-      const r=irisRadiusPx(lm,468,469), l=irisRadiusPx(lm,473,474);
-      const avg=(r+l)/2; return 11.7/(avg*2);
+    function calibrateMmPerPx(lm) {
+      const r = irisRadiusPx(lm, 468, 469), l = irisRadiusPx(lm, 473, 474);
+      const avg = (r + l) / 2; return 11.7 / (avg * 2);
     }
-    function ipdPx(lm){
-      const r=lm[468], l=lm[473];
-      return Math.hypot((l.x-r.x)*W,(l.y-r.y)*H);
+    function ipdPx(lm) {
+      const r = lm[468], l = lm[473];
+      return Math.hypot((l.x - r.x) * W, (l.y - r.y) * H);
     }
-    function smooth(v){ if(v==null)return null; q.push(v); if(q.length>10)q.shift(); return q.reduce((a,b)=>a+b,0)/q.length; }
+    function smooth(v) { if (v == null) return null; q.push(v); if (q.length > 10) q.shift(); return q.reduce((a, b) => a + b, 0) / q.length; }
 
-    function sendToUnity(obj){
+    function sendToUnity(obj) {
       const msg = JSON.stringify(obj);
       if (window.unityInstance?.SendMessage) {
         // Unity sahnesinde FaceBridge scriptini taşıyan GameObject adını gönder
-        window.unityInstance.SendMessage(receiverName || "FaceBridge", "OnFace", msg);
+        window.unityInstance.SendMessage(receiverName, "OnFace", msg);
       } else if (typeof SendMessage === "function") {
-        SendMessage(receiverName || "FaceBridge", "OnFace", msg);
+        SendMessage(receiverName, "OnFace", msg);
       }
     }
 
-    async function loop(){
-      if(!running || !landmarker){ requestAnimationFrame(loop); return; }
+    async function loop() {
+      if (!running || !landmarker) { requestAnimationFrame(loop); return; }
       const ts = performance.now();
-      if(video.readyState>=2){
+      if (video.readyState >= 2) {
         const res = landmarker.detectForVideo(video, ts);
         const f = res?.faceLandmarks?.[0];
-        if (f){
+        if (f) {
           const px = ipdPx(f);
           const mm = px * calibrateMmPerPx(f);
           sendToUnity({ ipdPx: smooth(px), ipdMm: smooth(mm) });
@@ -179,11 +226,12 @@
 
     // Unity'den .jslib ile çağrılmasa da manual kontrol için FaceAPI objesi:
     window.FaceAPI = {
-      async start(){ if(!landmarker) await init(); if(!running){ running=true; loop(); } },
-      stop(){ running=false; },
-      setReceiver(n){ receiverName = n; }
+      async start() { if (!landmarker) await init(); if (!running) { running = true; loop(); } },
+      stop() { running = false; },
+      setReceiver(n) { receiverName = n; }
     };
   </script>
 
-  </body>
+</body>
+
 </html>
