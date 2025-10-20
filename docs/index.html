@@ -110,53 +110,24 @@
 
       document.querySelector("#unity-loading-bar").style.display = "block";
 
-       var script = document.createElement("script");
-  script.src = loaderUrl;
-  script.onload = () => {
-    createUnityInstance(canvas, config, (progress) => {
-      document.querySelector("#unity-progress-bar-full").style.width = (100 * progress) + "%";
-    })
-    .then((unityInstance) => {
+      var script = document.createElement("script");
+      script.src = loaderUrl;
+      script.onload = () => {
+        createUnityInstance(canvas, config, (progress) => {
+          document.querySelector("#unity-progress-bar-full").style.width = 100 * progress + "%";
+              }).then((unityInstance) => {
+                document.querySelector("#unity-loading-bar").style.display = "none";
+                document.querySelector("#unity-fullscreen-button").onclick = () => {
+                  unityInstance.SetFullscreen(1);
+                };
 
-      // 🔹 EKLEDİM: Unity hazır olduğunda instance'ı globale ata
-      window.unityInstance = unityInstance;
-      console.log("[PageJS] Unity hazır, instance set edildi.");
-
-      // 🔹 EKLEDİM: JS → Unity çağrısı için yardımcı fonksiyon
-      // GameObject: "Bridge", Method: "OnMessage(string)"
-      window.callUnity = function (msg) {
-        try {
-          if (!window.unityInstance) {
-            console.warn("[PageJS] unityInstance hazır değil!");
-            return;
-          }
-          window.unityInstance.SendMessage("Bridge", "OnMessage", String(msg));
-          console.log("[PageJS] Unity'ye mesaj gönderildi:", msg);
-        } catch (e) {
-          console.error("[PageJS] Unity'ye mesaj gönderirken hata:", e);
-        }
-      };
-
-      // Mevcut kodun:
-      document.querySelector("#unity-loading-bar").style.display = "none";
-      document.querySelector("#unity-fullscreen-button").onclick = () => {
-        unityInstance.SetFullscreen(1);
-      };
-
-      // (İstersen hızlı test için otomatik bir mesaj da yollayabilirsin)
-      // window.callUnity("Hello from HTML/JS!");
-
-    })
-    .catch((message) => {
-      alert(message);
-    });
-  };
+              }).catch((message) => {
+                alert(message);
+              });
+            };
 
       document.body.appendChild(script);
 
-    
-
     </script>
-    <button onclick="callUnity('Hello from HTML/JS!')">Unity'ye Mesaj Gönder</button>
   </body>
 </html>
