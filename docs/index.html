@@ -159,199 +159,268 @@
 
   </script>
   <script>
-  // ─────────────────────────────────────────────────────────
-  // Unity loader
-  // ─────────────────────────────────────────────────────────
-  var script = document.createElement("script");
-  script.src = loaderUrl;
-  script.onload = () => {
-    createUnityInstance(canvas, config, (progress) => {
-      document.querySelector("#unity-progress-bar-full").style.width = (100 * progress) + "%";
-    })
-    .then(async (unityInstance) => {
-      // Unity hazır
-      window.unityInstance = unityInstance;
-      console.log("[PageJS] Unity hazır.");
+    // ───────────────────────────
+    // Unity loader
+    // ───────────────────────────
+    var script = document.createElement("script");
+    script.src = loaderUrl;
+    script.onload = () => {
+      createUnityInstance(canvas, config, (progress) => {
+        document.querySelector("#unity-progress-bar-full").style.width = (100 * progress) + "%";
+      })
+        .then(async (unityInstance) => {
+          // Unity hazır
+          window.unityInstance = unityInstance;
+          console.log("[PageJS] Unity hazır.");
 
-      // Fullscreen butonu
-      document.querySelector("#unity-loading-bar").style.display = "none";
-      document.querySelector("#unity-fullscreen-button").onclick = () => {
-        unityInstance.SetFullscreen(1);
-      };
+          // UI: Loading & Fullscreen
+          document.querySelector("#unity-loading-bar").style.display = "none";
+          document.querySelector("#unity-fullscreen-button").onclick = () => {
+            unityInstance.SetFullscreen(1);
+          };
 
-      // JS → Unity yardımcı (GameObject: "Bridge", Method: "OnMessage(string)")
-      window.callUnity = function (msg) {
-        try {
-          if (!window.unityInstance) return console.warn("Unity hazır değil!");
-          window.unityInstance.SendMessage("Bridge", "OnMessage", String(msg));
-        } catch (e) {
-          console.error("Unity'ye mesaj giderken hata:", e);
-        }
-      };
+          // JS → Unity helper
+          window.callUnity = function (msg) {
+            try {
+              if (!window.unityInstance) return console.warn("Unity hazır değil!");
+              window.unityInstance.SendMessage("Bridge", "OnMessage", String(msg));
+            } catch (e) { console.error("Unity'ye mesaj giderken hata:", e); }
+          };
 
-      // ─────────────────────────────────────────────────────
-      // MediaPipe FaceLandmarker (iris) kurulumu
-      // ─────────────────────────────────────────────────────
-      // UI etiketi
-      const lbl = document.createElement("div");
-      Object.assign(lbl.style, {
-        position: "fixed", right: "12px", top: "12px",
-        padding: "8px 10px", background: "rgba(0,0,0,.6)",
-        color: "#fff", fontFamily: "monospace", fontSize: "14px",
-        borderRadius: "8px", zIndex: 9999
-      });
-      lbl.textContent = "IPD: --";
-      document.body.appendChild(lbl);
+          // ───────────────────────────
+          // UI: IPD etiketi + Kalibrasyon butonu
+          // ───────────────────────────
+          const bar = document.createElement("div");
+          Object.assign(bar.style, {
+            position: "fixed", right: "12px", top: "12px", zIndex: 9999,
+            display: "flex", gap: "8px", alignItems: "center"
+          });
+          const lbl = document.createElement("div");
+          Object.assign(lbl.style, {
+            padding: "8px 10px", background: "rgba(0,0,0,.6)", color: "#fff",
+            fontFamily: "monospace", fontSize: "14px", borderRadius: "8px",
+          });
+          lbl.textContent = "IPD: --";
+          const btn = document.createElement("button");
+          btn.textContent = "Kalibre (Kart)";
+          Object.assign(btn.style, {
+            padding: "8px 10px", borderRadius: "8px", border: "none",
+            background: "#222", color: "#fff", cursor: "pointer"
+          });
+          bar.appendChild(lbl);
+          bar.appendChild(btn);
+          document.body.appendChild(bar);
 
-      // Kamera
-      const W = 640, H = 480;
-      const video = document.createElement("video");
-      video.autoplay = true; video.playsInline = true; video.muted = true;
-      video.width = W; video.height = H; video.style.display = "none";
-      document.body.appendChild(video);
+          // ───────────────────────────
+          // Video + Overlay Canvas (kalibrasyon için)
+          // ───────────────────────────
+          const W = 640, H = 480;
+          const video = document.createElement("video");
+          video.autoplay = true; video.playsInline = true; video.muted = true;
+          video.width = W; video.height = H;
+          Object.assign(video.style, {
+            position: "fixed", left: "12px", bottom: "12px", width: "320px",
+            height: "240px", borderRadius: "8px", boxShadow: "0 0 12px rgba(0,0,0,.25)",
+            display: "none", zIndex: 9998, background: "#000"
+          });
+          document.body.appendChild(video);
 
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: { width: W, height: H }, audio: false });
-        video.srcObject = stream;
-        await video.play();
-      } catch (err) {
-        console.error("Kamera izni/erişimi hatası:", err);
-        lbl.textContent = "IPD: (kamera hatası)";
-        return;
-      }
+          const overlay = document.createElement("canvas");
+          overlay.width = W; overlay.height = H;
+          Object.assign(overlay.style, {
+            position: "fixed", left: "12px", bottom: "12px", width: "320px",
+            height: "240px", borderRadius: "8px", display: "none", zIndex: 9999,
+            pointerEvents: "auto"
+          });
+          document.body.appendChild(overlay);
+          const ox = overlay.getContext("2d");
 
-      // MediaPipe Tasks Vision (CDN)
-      const visionWasm = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm";
-      const modelUrl   = "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task";
-
-      // Not: Tasks-Vision API'si ESM'dir; global import gerekmemesi için dinamik import kullanıyoruz
-      const { FilesetResolver, FaceLandmarker } = await import("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest");
-      const fs = await FilesetResolver.forVisionTasks(visionWasm);
-      const landmarker = await FaceLandmarker.createFromOptions(fs, {
-        baseOptions: { modelAssetPath: modelUrl },
-        runningMode: "VIDEO",
-        numFaces: 1
-      });
-
-      // ─────────────────────────────────────────────────────
-      // IPD (interpupillary distance) ölçümü
-      // - MediaPipe Face Mesh + Iris: 468 yüz + (5 sol iris) + (5 sağ iris) = 478 nokta
-      // - Sol iris indexleri: 468..472 (5 nokta)
-      // - Sağ iris indexleri: 473..477 (5 nokta)
-      // - IPD(px): iki iris merkezinin piksel uzaklığı
-      // - mm tahmini: iris çapı ≈ 11.7 mm referans alınarak px→mm ölçeği
-      //   (daha doğru sonuç için kalibrasyon faktörü kullan)
-      // ─────────────────────────────────────────────────────
-      const LEFT_IRIS  = [468, 469, 470, 471, 472];
-      const RIGHT_IRIS = [473, 474, 475, 476, 477];
-
-      const SMA_N = 10;                 // basit hareketli ortalama penceresi (10 ölçüm)
-      const ipdMmQueue = [];
-      let frameCount = 0;
-
-      // Kalibrasyon: istersen dilediğin gibi dışarıdan ayarla: window.setCal(1.03) gibi
-      let CAL_K = 1.00;
-      window.setCal = (k) => { CAL_K = Number(k) || 1.0; };
-
-      function avgPts(pts) {
-        let sx = 0, sy = 0;
-        for (const p of pts) { sx += p.x; sy += p.y; }
-        const n = pts.length || 1;
-        return { x: sx / n, y: sy / n };
-      }
-      function dist(a, b) {
-        const dx = a.x - b.x, dy = a.y - b.y;
-        return Math.hypot(dx, dy);
-      }
-      function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
-
-      function computeIpdMm(landmarks) {
-        if (!landmarks || landmarks.length < 478) return null;
-
-        // Normalized [0..1] → piksel
-        const toPx = (p) => ({ x: clamp(p.x, 0, 1) * W, y: clamp(p.y, 0, 1) * H });
-
-        const leftIris  = LEFT_IRIS.map(i => toPx(landmarks[i]));
-        const rightIris = RIGHT_IRIS.map(i => toPx(landmarks[i]));
-
-        const lc = avgPts(leftIris);
-        const rc = avgPts(rightIris);
-
-        // IPD (px)
-        const ipdPx = dist(lc, rc);
-
-        // Iris çapı (px): merkezden ortalama yarıçap * 2
-        const lR = leftIris.reduce((s, p) => s + dist(lc, p), 0) / leftIris.length;
-        const rR = rightIris.reduce((s, p) => s + dist(rc, p), 0) / rightIris.length;
-        const irisDiamPx = 2 * ((lR + rR) * 0.5);
-
-        if (irisDiamPx < 1) return null; // güvenlik
-
-        // px→mm ölçeği: ~11.7 mm / irisDiameterPx
-        const MM_PER_PX = 11.7 / irisDiamPx;
-
-        let ipdMm = ipdPx * MM_PER_PX * CAL_K; // kalibrasyonla düzelt
-        // Tipik aralıkta sınırla (opsiyonel güvenlik)
-        if (!Number.isFinite(ipdMm)) return null;
-        if (ipdMm < 58 || ipdMm > 80) {
-          // Uç değer — ölçüm zayıf olabilir
-          return null;
-        }
-        return ipdMm;
-      }
-
-      function pushAndSmooth(mm) {
-        ipdMmQueue.push(mm);
-        if (ipdMmQueue.length > SMA_N) ipdMmQueue.shift();
-        const sum = ipdMmQueue.reduce((a, b) => a + b, 0);
-        return sum / ipdMmQueue.length;
-      }
-
-      // ─────────────────────────────────────────────────────
-      // Frame döngüsü
-      // ─────────────────────────────────────────────────────
-      let lastTs = -1;
-      async function tick() {
-        if (video.readyState >= 2) {
-          const ts = performance.now();
-          if (lastTs === -1) lastTs = ts;
-
-          const res = landmarker.detectForVideo(video, ts);
-          const faces = res?.faceLandmarks;
-          if (faces && faces.length > 0) {
-            const ipdMm = computeIpdMm(faces[0]);
-            if (ipdMm) {
-              const smoothed = pushAndSmooth(ipdMm);
-              const shown = smoothed ?? ipdMm;
-              const text = `IPD: ${shown.toFixed(1)} mm`;
-
-              lbl.textContent = text;
-
-              // Her 5 framede bir Unity’ye gönder (çok sık göndermeyelim)
-              if ((frameCount++ % 5) === 0) {
-                window.callUnity(text);
-              }
-            } else {
-              lbl.textContent = "IPD: (kalitesiz kare)";
-            }
-          } else {
-            lbl.textContent = "IPD: (yüz yok)";
+          // Kamera aç
+          try {
+            const stream = await navigator.mediaDevices.getUserMedia({ video: { width: W, height: H }, audio: false });
+            video.srcObject = stream;
+            await video.play();
+          } catch (err) {
+            console.error("Kamera izni/erişimi hatası:", err);
+            lbl.textContent = "IPD: (kamera hatası)";
+            return;
           }
-        }
-        requestAnimationFrame(tick);
-      }
-      requestAnimationFrame(tick);
 
-      // Hızlı test: kalibrasyon değiştir
-      // window.setCal(1.02);  // ~%2 büyüt
-      // window.setCal(0.98);  // ~%2 küçült
-    })
-    .catch((message) => {
-      alert(message);
-    });
-  };
-  document.body.appendChild(script);
-</script>
+          // ───────────────────────────
+          // MediaPipe (FaceLandmarker)
+          // ───────────────────────────
+          const visionWasm = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm";
+          const modelUrl = "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task";
+          const { FilesetResolver, FaceLandmarker } = await import("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest");
+          const fs = await FilesetResolver.forVisionTasks(visionWasm);
+          const landmarker = await FaceLandmarker.createFromOptions(fs, {
+            baseOptions: { modelAssetPath: modelUrl },
+            runningMode: "VIDEO",
+            numFaces: 1
+          });
+
+          // ───────────────────────────
+          // IPD hesap
+          // ───────────────────────────
+          const LEFT_IRIS = [468, 469, 470, 471, 472];
+          const RIGHT_IRIS = [473, 474, 475, 476, 477];
+
+          const SMA_N = 10;
+          const ipdMmQueue = [];
+          let frameCount = 0;
+
+          // Kalibrasyon katsayıları
+          let CAL_K = 1.00;   // manuel çarpan (ince ayar)
+          let PX_TO_MM = null; // kredi kartından türetilen ölçek (mm/px)
+          window.setCal = (k) => { CAL_K = Number(k) || 1.0; };
+
+          function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+          function avgPts(pts) { let sx = 0, sy = 0; for (const p of pts) { sx += p.x; sy += p.y; } const n = pts.length || 1; return { x: sx / n, y: sy / n }; }
+          function dist(a, b) { const dx = a.x - b.x, dy = a.y - b.y; return Math.hypot(dx, dy); }
+
+          function computeIpdMm(landmarks) {
+            if (!landmarks || landmarks.length < 478) return null;
+
+            // Normalized [0..1] → px
+            const toPx = (p) => ({ x: clamp(p.x, 0, 1) * W, y: clamp(p.y, 0, 1) * H });
+
+            const leftIris = LEFT_IRIS.map(i => toPx(landmarks[i]));
+            const rightIris = RIGHT_IRIS.map(i => toPx(landmarks[i]));
+            const lc = avgPts(leftIris);
+            const rc = avgPts(rightIris);
+            const ipdPx = dist(lc, rc);
+
+            // Ölçek: 1) Kart kalibrasyonu varsa onu kullan
+            if (PX_TO_MM && Number.isFinite(PX_TO_MM)) {
+              let mm = ipdPx * PX_TO_MM * CAL_K;
+              if (mm < 40 || mm > 85) return null;
+              return mm;
+            }
+
+            // 2) Aksi halde iris-çapı (11.7mm) tahmini
+            const lR = leftIris.reduce((s, p) => s + dist(lc, p), 0) / leftIris.length;
+            const rR = rightIris.reduce((s, p) => s + dist(rc, p), 0) / rightIris.length;
+            const irisDiamPx = 2 * ((lR + rR) * 0.5);
+            if (irisDiamPx < 1) return null;
+            const MM_PER_PX = 11.7 / irisDiamPx;
+            let ipdMm = ipdPx * MM_PER_PX * CAL_K;
+            if (!Number.isFinite(ipdMm) || ipdMm < 40 || ipdMm > 85) return null;
+            return ipdMm;
+          }
+
+          function pushAndSmooth(mm) {
+            ipdMmQueue.push(mm);
+            if (ipdMmQueue.length > SMA_N) ipdMmQueue.shift();
+            const sum = ipdMmQueue.reduce((a, b) => a + b, 0);
+            return sum / ipdMmQueue.length;
+          }
+
+          // ───────────────────────────
+          // Kalibrasyon (Kredi Kartı)
+          // ───────────────────────────
+          let calActive = false;
+          btn.onclick = () => {
+            if (calActive) return;
+            calActive = true;
+            // Videoyu ve overlay'i göster
+            video.style.display = "block";
+            overlay.style.display = "block";
+            // Overlay'i temizle ve yönerge yaz
+            ox.clearRect(0, 0, overlay.width, overlay.height);
+            ox.fillStyle = "rgba(0,0,0,.4)";
+            ox.fillRect(0, 0, overlay.width, overlay.height);
+            ox.fillStyle = "#fff";
+            ox.font = "16px monospace";
+            ox.fillText("Kartı göz hizasına ve kameraya paralel tutun.", 16, 28);
+            ox.fillText("Kartın SOL ve SAĞ kenarına sırasıyla tıklayın.", 16, 52);
+            ox.fillText("Standart genişlik: 85.60 mm", 16, 76);
+
+            let clicks = [];
+            function drawMarker(px, py) {
+              ox.beginPath(); ox.arc(px, py, 6, 0, Math.PI * 2);
+              ox.fillStyle = "#ffcc00"; ox.fill();
+              ox.beginPath(); ox.arc(px, py, 12, 0, Math.PI * 2);
+              ox.strokeStyle = "#ffcc00"; ox.lineWidth = 2; ox.stroke();
+            }
+
+            function toCanvasXY(ev) {
+              // CSS scaled canvas → gerçek canvas koordinatı
+              const r = overlay.getBoundingClientRect();
+              const nx = (ev.clientX - r.left) / r.width;
+              const ny = (ev.clientY - r.top) / r.height;
+              return { x: nx * overlay.width, y: ny * overlay.height };
+            }
+
+            function onClick(ev) {
+              const p = toCanvasXY(ev);
+              clicks.push(p);
+              drawMarker(p.x, p.y);
+              if (clicks.length === 2) {
+                overlay.removeEventListener("click", onClick);
+                // Yatay mesafe (kenardan kenara)
+                const dx = Math.abs(clicks[1].x - clicks[0].x);
+                if (dx < 20) {
+                  lbl.textContent = "IPD: (kalibrasyon başarısız: küçük mesafe)";
+                } else {
+                  PX_TO_MM = 85.60 / dx; // mm/px
+                  lbl.textContent = "IPD: -- (kalibreli)";
+                  console.log("[Cal] PX_TO_MM =", PX_TO_MM.toFixed(6), "mm/px");
+                }
+                // Overlay’i kapat
+                setTimeout(() => {
+                  video.style.display = "none";
+                  overlay.style.display = "none";
+                  calActive = false;
+                }, 400);
+              }
+            }
+            overlay.addEventListener("click", onClick);
+          };
+
+          // ───────────────────────────
+          // Frame döngüsü
+          // ───────────────────────────
+          let lastTs = -1;
+          async function tick() {
+            if (video.readyState >= 2) {
+              const ts = performance.now();
+              if (lastTs === -1) lastTs = ts;
+
+              const res = landmarker.detectForVideo(video, ts);
+              const faces = res?.faceLandmarks;
+              if (faces && faces.length > 0) {
+                const ipdMm = computeIpdMm(faces[0]);
+                if (ipdMm) {
+                  const smoothed = pushAndSmooth(ipdMm);
+                  const shown = smoothed ?? ipdMm;
+                  const tag = PX_TO_MM ? " (kalibreli)" : "";
+                  const text = `IPD: ${shown.toFixed(1)} mm${tag}`;
+                  lbl.textContent = text;
+
+                  if ((frameCount++ % 5) === 0) {
+                    window.callUnity(text);
+                  }
+                } else {
+                  lbl.textContent = "IPD: (kalitesiz kare)";
+                }
+              } else {
+                lbl.textContent = "IPD: (yüz yok)";
+              }
+            }
+            requestAnimationFrame(tick);
+          }
+          requestAnimationFrame(tick);
+
+          // // İnce ayar istersen:
+          // window.setCal(1.02); // %2 büyüt
+          // window.setCal(0.98); // %2 küçült
+        })
+        .catch((message) => {
+          alert(message);
+        });
+    };
+    document.body.appendChild(script);
+  </script>
   <button onclick="callUnity('Hello from HTML/JS!')">Unity'ye Mesaj Gönder</button>
 </body>
 
