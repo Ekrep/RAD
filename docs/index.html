@@ -1,133 +1,358 @@
 <!DOCTYPE html>
 <html lang="en-us">
-  <head>
-    <meta charset="utf-8">
-    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
-    <title>Unity Web Player | TestBridge</title>
-    <link rel="shortcut icon" href="TemplateData/favicon.ico">
-    <link rel="stylesheet" href="TemplateData/style.css">
-  </head>
-  <body>
-    <div id="unity-container" class="unity-desktop">
-      <canvas id="unity-canvas" width=960 height=600 tabindex="-1"></canvas>
-      <div id="unity-loading-bar">
-        <div id="unity-logo"></div>
-        <div id="unity-progress-bar-empty">
-          <div id="unity-progress-bar-full"></div>
-        </div>
-      </div>
-      <div id="unity-warning"> </div>
-      <div id="unity-footer">
-        <div id="unity-logo-title-footer"></div>
-        <div id="unity-fullscreen-button"></div>
-        <div id="unity-build-title">TestBridge</div>
+
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+  <title>Unity Web Player | TestBridge</title>
+  <link rel="shortcut icon" href="TemplateData/favicon.ico">
+  <link rel="stylesheet" href="TemplateData/style.css">
+</head>
+
+<body>
+  <div id="unity-container" class="unity-desktop">
+    <canvas id="unity-canvas" width=960 height=600 tabindex="-1"></canvas>
+    <div id="unity-loading-bar">
+      <div id="unity-logo"></div>
+      <div id="unity-progress-bar-empty">
+        <div id="unity-progress-bar-full"></div>
       </div>
     </div>
-    <script>
-      var canvas = document.querySelector("#unity-canvas");
+    <div id="unity-warning"> </div>
+    <div id="unity-footer">
+      <div id="unity-logo-title-footer"></div>
+      <div id="unity-fullscreen-button"></div>
+      <div id="unity-build-title">TestBridge</div>
+    </div>
+  </div>
+  <script>
+    var canvas = document.querySelector("#unity-canvas");
 
-      // Shows a temporary message banner/ribbon for a few seconds, or
-      // a permanent error message on top of the canvas if type=='error'.
-      // If type=='warning', a yellow highlight color is used.
-      // Modify or remove this function to customize the visually presented
-      // way that non-critical warnings and error messages are presented to the
-      // user.
-      function unityShowBanner(msg, type) {
-        var warningBanner = document.querySelector("#unity-warning");
-        function updateBannerVisibility() {
-          warningBanner.style.display = warningBanner.children.length ? 'block' : 'none';
-        }
-        var div = document.createElement('div');
-        div.innerHTML = msg;
-        warningBanner.appendChild(div);
-        if (type == 'error') div.style = 'background: red; padding: 10px;';
-        else {
-          if (type == 'warning') div.style = 'background: yellow; padding: 10px;';
-          setTimeout(function() {
-            warningBanner.removeChild(div);
-            updateBannerVisibility();
-          }, 5000);
-        }
-        updateBannerVisibility();
+    // Shows a temporary message banner/ribbon for a few seconds, or
+    // a permanent error message on top of the canvas if type=='error'.
+    // If type=='warning', a yellow highlight color is used.
+    // Modify or remove this function to customize the visually presented
+    // way that non-critical warnings and error messages are presented to the
+    // user.
+    function unityShowBanner(msg, type) {
+      var warningBanner = document.querySelector("#unity-warning");
+      function updateBannerVisibility() {
+        warningBanner.style.display = warningBanner.children.length ? 'block' : 'none';
       }
+      var div = document.createElement('div');
+      div.innerHTML = msg;
+      warningBanner.appendChild(div);
+      if (type == 'error') div.style = 'background: red; padding: 10px;';
+      else {
+        if (type == 'warning') div.style = 'background: yellow; padding: 10px;';
+        setTimeout(function () {
+          warningBanner.removeChild(div);
+          updateBannerVisibility();
+        }, 5000);
+      }
+      updateBannerVisibility();
+    }
 
-      var buildUrl = "Build";
-      var loaderUrl = buildUrl + "/bld.loader.js";
-      var config = {
-        arguments: [],
-        dataUrl: buildUrl + "/bld.data",
-        frameworkUrl: buildUrl + "/bld.framework.js",
-        codeUrl: buildUrl + "/bld.wasm",
-        streamingAssetsUrl: "StreamingAssets",
-        companyName: "DefaultCompany",
-        productName: "TestBridge",
-        productVersion: "0.1.0",
-        showBanner: unityShowBanner,
-        // errorHandler: function(err, url, line) {
-        //    alert("error " + err + " occurred at line " + line);
-        //    // Return 'true' if you handled this error and don't want Unity
-        //    // to process it further, 'false' otherwise.
-        //    return true;
-        // },
+    var buildUrl = "Build";
+    var loaderUrl = buildUrl + "/bld.loader.js";
+    var config = {
+      arguments: [],
+      dataUrl: buildUrl + "/bld.data",
+      frameworkUrl: buildUrl + "/bld.framework.js",
+      codeUrl: buildUrl + "/bld.wasm",
+      streamingAssetsUrl: "StreamingAssets",
+      companyName: "DefaultCompany",
+      productName: "TestBridge",
+      productVersion: "0.1.0",
+      showBanner: unityShowBanner,
+      // errorHandler: function(err, url, line) {
+      //    alert("error " + err + " occurred at line " + line);
+      //    // Return 'true' if you handled this error and don't want Unity
+      //    // to process it further, 'false' otherwise.
+      //    return true;
+      // },
+    };
+
+    // By default, Unity keeps WebGL canvas render target size matched with
+    // the DOM size of the canvas element (scaled by window.devicePixelRatio)
+    // Set this to false if you want to decouple this synchronization from
+    // happening inside the engine, and you would instead like to size up
+    // the canvas DOM size and WebGL render target sizes yourself.
+    // config.matchWebGLToCanvasSize = false;
+
+    // If you would like all file writes inside Unity Application.persistentDataPath
+    // directory to automatically persist so that the contents are remembered when
+    // the user revisits the site the next time, uncomment the following line:
+    // config.autoSyncPersistentDataPath = true;
+    // This autosyncing is currently not the default behavior to avoid regressing
+    // existing user projects that might rely on the earlier manual
+    // JS_FileSystem_Sync() behavior, but in future Unity version, this will be
+    // expected to change.
+
+    if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
+      // Mobile device style: fill the whole browser client area with the game canvas:
+
+      var meta = document.createElement('meta');
+      meta.name = 'viewport';
+      meta.content = 'width=device-width, height=device-height, initial-scale=1.0, user-scalable=no, shrink-to-fit=yes';
+      document.getElementsByTagName('head')[0].appendChild(meta);
+      document.querySelector("#unity-container").className = "unity-mobile";
+      canvas.className = "unity-mobile";
+
+      // To lower canvas resolution on mobile devices to gain some
+      // performance, uncomment the following line:
+      // config.devicePixelRatio = 1;
+
+
+    } else {
+      // Desktop style: Render the game canvas in a window that can be maximized to fullscreen:
+      canvas.style.width = "960px";
+      canvas.style.height = "600px";
+    }
+
+    document.querySelector("#unity-loading-bar").style.display = "block";
+
+    var script = document.createElement("script");
+    script.src = loaderUrl;
+    script.onload = () => {
+      createUnityInstance(canvas, config, (progress) => {
+        document.querySelector("#unity-progress-bar-full").style.width = (100 * progress) + "%";
+      })
+        .then((unityInstance) => {
+
+          // 🔹 EKLEDİM: Unity hazır olduğunda instance'ı globale ata
+          window.unityInstance = unityInstance;
+          console.log("[PageJS] Unity hazır, instance set edildi.");
+
+          // 🔹 EKLEDİM: JS → Unity çağrısı için yardımcı fonksiyon
+          // GameObject: "Bridge", Method: "OnMessage(string)"
+          window.callUnity = function (msg) {
+            try {
+              if (!window.unityInstance) {
+                console.warn("[PageJS] unityInstance hazır değil!");
+                return;
+              }
+              window.unityInstance.SendMessage("Bridge", "OnMessage", String(msg));
+              console.log("[PageJS] Unity'ye mesaj gönderildi:", msg);
+            } catch (e) {
+              console.error("[PageJS] Unity'ye mesaj gönderirken hata:", e);
+            }
+          };
+
+          // Mevcut kodun:
+          document.querySelector("#unity-loading-bar").style.display = "none";
+          document.querySelector("#unity-fullscreen-button").onclick = () => {
+            unityInstance.SetFullscreen(1);
+          };
+
+          // (İstersen hızlı test için otomatik bir mesaj da yollayabilirsin)
+          // window.callUnity("Hello from HTML/JS!");
+
+        })
+        .catch((message) => {
+          alert(message);
+        });
+    };
+
+    document.body.appendChild(script);
+
+
+  </script>
+  <script>
+  // ─────────────────────────────────────────────────────────
+  // Unity loader
+  // ─────────────────────────────────────────────────────────
+  var script = document.createElement("script");
+  script.src = loaderUrl;
+  script.onload = () => {
+    createUnityInstance(canvas, config, (progress) => {
+      document.querySelector("#unity-progress-bar-full").style.width = (100 * progress) + "%";
+    })
+    .then(async (unityInstance) => {
+      // Unity hazır
+      window.unityInstance = unityInstance;
+      console.log("[PageJS] Unity hazır.");
+
+      // Fullscreen butonu
+      document.querySelector("#unity-loading-bar").style.display = "none";
+      document.querySelector("#unity-fullscreen-button").onclick = () => {
+        unityInstance.SetFullscreen(1);
       };
 
-      // By default, Unity keeps WebGL canvas render target size matched with
-      // the DOM size of the canvas element (scaled by window.devicePixelRatio)
-      // Set this to false if you want to decouple this synchronization from
-      // happening inside the engine, and you would instead like to size up
-      // the canvas DOM size and WebGL render target sizes yourself.
-      // config.matchWebGLToCanvasSize = false;
+      // JS → Unity yardımcı (GameObject: "Bridge", Method: "OnMessage(string)")
+      window.callUnity = function (msg) {
+        try {
+          if (!window.unityInstance) return console.warn("Unity hazır değil!");
+          window.unityInstance.SendMessage("Bridge", "OnMessage", String(msg));
+        } catch (e) {
+          console.error("Unity'ye mesaj giderken hata:", e);
+        }
+      };
 
-      // If you would like all file writes inside Unity Application.persistentDataPath
-      // directory to automatically persist so that the contents are remembered when
-      // the user revisits the site the next time, uncomment the following line:
-      // config.autoSyncPersistentDataPath = true;
-      // This autosyncing is currently not the default behavior to avoid regressing
-      // existing user projects that might rely on the earlier manual
-      // JS_FileSystem_Sync() behavior, but in future Unity version, this will be
-      // expected to change.
+      // ─────────────────────────────────────────────────────
+      // MediaPipe FaceLandmarker (iris) kurulumu
+      // ─────────────────────────────────────────────────────
+      // UI etiketi
+      const lbl = document.createElement("div");
+      Object.assign(lbl.style, {
+        position: "fixed", right: "12px", top: "12px",
+        padding: "8px 10px", background: "rgba(0,0,0,.6)",
+        color: "#fff", fontFamily: "monospace", fontSize: "14px",
+        borderRadius: "8px", zIndex: 9999
+      });
+      lbl.textContent = "IPD: --";
+      document.body.appendChild(lbl);
 
-      if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
-        // Mobile device style: fill the whole browser client area with the game canvas:
+      // Kamera
+      const W = 640, H = 480;
+      const video = document.createElement("video");
+      video.autoplay = true; video.playsInline = true; video.muted = true;
+      video.width = W; video.height = H; video.style.display = "none";
+      document.body.appendChild(video);
 
-        var meta = document.createElement('meta');
-        meta.name = 'viewport';
-        meta.content = 'width=device-width, height=device-height, initial-scale=1.0, user-scalable=no, shrink-to-fit=yes';
-        document.getElementsByTagName('head')[0].appendChild(meta);
-        document.querySelector("#unity-container").className = "unity-mobile";
-        canvas.className = "unity-mobile";
-
-        // To lower canvas resolution on mobile devices to gain some
-        // performance, uncomment the following line:
-        // config.devicePixelRatio = 1;
-
-
-      } else {
-        // Desktop style: Render the game canvas in a window that can be maximized to fullscreen:
-        canvas.style.width = "960px";
-        canvas.style.height = "600px";
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { width: W, height: H }, audio: false });
+        video.srcObject = stream;
+        await video.play();
+      } catch (err) {
+        console.error("Kamera izni/erişimi hatası:", err);
+        lbl.textContent = "IPD: (kamera hatası)";
+        return;
       }
 
-      document.querySelector("#unity-loading-bar").style.display = "block";
+      // MediaPipe Tasks Vision (CDN)
+      const visionWasm = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest/wasm";
+      const modelUrl   = "https://storage.googleapis.com/mediapipe-models/face_landmarker/face_landmarker/float16/1/face_landmarker.task";
 
-      var script = document.createElement("script");
-      script.src = loaderUrl;
-      script.onload = () => {
-        createUnityInstance(canvas, config, (progress) => {
-          document.querySelector("#unity-progress-bar-full").style.width = 100 * progress + "%";
-              }).then((unityInstance) => {
-                document.querySelector("#unity-loading-bar").style.display = "none";
-                document.querySelector("#unity-fullscreen-button").onclick = () => {
-                  unityInstance.SetFullscreen(1);
-                };
+      // Not: Tasks-Vision API'si ESM'dir; global import gerekmemesi için dinamik import kullanıyoruz
+      const { FilesetResolver, FaceLandmarker } = await import("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@latest");
+      const fs = await FilesetResolver.forVisionTasks(visionWasm);
+      const landmarker = await FaceLandmarker.createFromOptions(fs, {
+        baseOptions: { modelAssetPath: modelUrl },
+        runningMode: "VIDEO",
+        numFaces: 1
+      });
 
-              }).catch((message) => {
-                alert(message);
-              });
-            };
+      // ─────────────────────────────────────────────────────
+      // IPD (interpupillary distance) ölçümü
+      // - MediaPipe Face Mesh + Iris: 468 yüz + (5 sol iris) + (5 sağ iris) = 478 nokta
+      // - Sol iris indexleri: 468..472 (5 nokta)
+      // - Sağ iris indexleri: 473..477 (5 nokta)
+      // - IPD(px): iki iris merkezinin piksel uzaklığı
+      // - mm tahmini: iris çapı ≈ 11.7 mm referans alınarak px→mm ölçeği
+      //   (daha doğru sonuç için kalibrasyon faktörü kullan)
+      // ─────────────────────────────────────────────────────
+      const LEFT_IRIS  = [468, 469, 470, 471, 472];
+      const RIGHT_IRIS = [473, 474, 475, 476, 477];
 
-      document.body.appendChild(script);
+      const SMA_N = 10;                 // basit hareketli ortalama penceresi (10 ölçüm)
+      const ipdMmQueue = [];
+      let frameCount = 0;
 
-    </script>
-  </body>
+      // Kalibrasyon: istersen dilediğin gibi dışarıdan ayarla: window.setCal(1.03) gibi
+      let CAL_K = 1.00;
+      window.setCal = (k) => { CAL_K = Number(k) || 1.0; };
+
+      function avgPts(pts) {
+        let sx = 0, sy = 0;
+        for (const p of pts) { sx += p.x; sy += p.y; }
+        const n = pts.length || 1;
+        return { x: sx / n, y: sy / n };
+      }
+      function dist(a, b) {
+        const dx = a.x - b.x, dy = a.y - b.y;
+        return Math.hypot(dx, dy);
+      }
+      function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+      function computeIpdMm(landmarks) {
+        if (!landmarks || landmarks.length < 478) return null;
+
+        // Normalized [0..1] → piksel
+        const toPx = (p) => ({ x: clamp(p.x, 0, 1) * W, y: clamp(p.y, 0, 1) * H });
+
+        const leftIris  = LEFT_IRIS.map(i => toPx(landmarks[i]));
+        const rightIris = RIGHT_IRIS.map(i => toPx(landmarks[i]));
+
+        const lc = avgPts(leftIris);
+        const rc = avgPts(rightIris);
+
+        // IPD (px)
+        const ipdPx = dist(lc, rc);
+
+        // Iris çapı (px): merkezden ortalama yarıçap * 2
+        const lR = leftIris.reduce((s, p) => s + dist(lc, p), 0) / leftIris.length;
+        const rR = rightIris.reduce((s, p) => s + dist(rc, p), 0) / rightIris.length;
+        const irisDiamPx = 2 * ((lR + rR) * 0.5);
+
+        if (irisDiamPx < 1) return null; // güvenlik
+
+        // px→mm ölçeği: ~11.7 mm / irisDiameterPx
+        const MM_PER_PX = 11.7 / irisDiamPx;
+
+        let ipdMm = ipdPx * MM_PER_PX * CAL_K; // kalibrasyonla düzelt
+        // Tipik aralıkta sınırla (opsiyonel güvenlik)
+        if (!Number.isFinite(ipdMm)) return null;
+        if (ipdMm < 45 || ipdMm > 80) {
+          // Uç değer — ölçüm zayıf olabilir
+          return null;
+        }
+        return ipdMm;
+      }
+
+      function pushAndSmooth(mm) {
+        ipdMmQueue.push(mm);
+        if (ipdMmQueue.length > SMA_N) ipdMmQueue.shift();
+        const sum = ipdMmQueue.reduce((a, b) => a + b, 0);
+        return sum / ipdMmQueue.length;
+      }
+
+      // ─────────────────────────────────────────────────────
+      // Frame döngüsü
+      // ─────────────────────────────────────────────────────
+      let lastTs = -1;
+      async function tick() {
+        if (video.readyState >= 2) {
+          const ts = performance.now();
+          if (lastTs === -1) lastTs = ts;
+
+          const res = landmarker.detectForVideo(video, ts);
+          const faces = res?.faceLandmarks;
+          if (faces && faces.length > 0) {
+            const ipdMm = computeIpdMm(faces[0]);
+            if (ipdMm) {
+              const smoothed = pushAndSmooth(ipdMm);
+              const shown = smoothed ?? ipdMm;
+              const text = `IPD: ${shown.toFixed(1)} mm`;
+
+              lbl.textContent = text;
+
+              // Her 5 framede bir Unity’ye gönder (çok sık göndermeyelim)
+              if ((frameCount++ % 5) === 0) {
+                window.callUnity(text);
+              }
+            } else {
+              lbl.textContent = "IPD: (kalitesiz kare)";
+            }
+          } else {
+            lbl.textContent = "IPD: (yüz yok)";
+          }
+        }
+        requestAnimationFrame(tick);
+      }
+      requestAnimationFrame(tick);
+
+      // Hızlı test: kalibrasyon değiştir
+      // window.setCal(1.02);  // ~%2 büyüt
+      // window.setCal(0.98);  // ~%2 küçült
+    })
+    .catch((message) => {
+      alert(message);
+    });
+  };
+  document.body.appendChild(script);
+</script>
+  <button onclick="callUnity('Hello from HTML/JS!')">Unity'ye Mesaj Gönder</button>
+</body>
+
 </html>
