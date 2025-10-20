@@ -293,7 +293,7 @@
         let ipdMm = ipdPx * MM_PER_PX * CAL_K; // kalibrasyonla düzelt
         // Tipik aralıkta sınırla (opsiyonel güvenlik)
         if (!Number.isFinite(ipdMm)) return null;
-        if (ipdMm < 58 || ipdMm > 64) {
+        if (ipdMm < 58 || ipdMm > 80) {
           // Uç değer — ölçüm zayıf olabilir
           return null;
         }
